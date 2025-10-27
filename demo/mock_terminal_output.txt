@@ -1,0 +1,58 @@
+$ cd backend
+$ uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [28180]
+INFO:     Started server process [28182]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+
+[User triggers distraction event in Chrome]
+
+→ POST /intervention received
+→ FocusEvent validated:
+  {
+    "goal": "Finish Section 2 by 3 PM",
+    "context_title": "Project_Proposal.docx",
+    "context_app": "Google Docs",
+    "time_on_task_minutes": 42,
+    "event": "switched_to_youtube"
+  }
+
+→ Calling You.com Web Search API...
+  Query: "evidence-based focus recovery techniques neuroscience"
+  ✓ Results retrieved (237ms)
+
+→ Calling You.com News API...
+  Topics: ["attention", "deep work", "context switching"]
+  ✓ Results retrieved (198ms)
+
+→ Calling You.com Smart/Research API...
+  Context: User worked 42 min, distracted by YouTube
+  ✓ Synthesis complete (312ms)
+
+→ Intervention generated:
+  {
+    "action_now": "Stand up and take a 90-second walk—no phone.",
+    "why_it_works": "Stanford research shows brief walks reset...",
+    "goal_reminder": "Your goal: Finish Section 2 by 3 PM",
+    "citation": "Oppezzo & Schwartz, Stanford (2023)"
+  }
+
+← Response sent (total: 521ms)
+
+INFO:     127.0.0.1:56234 - "POST /intervention HTTP/1.1" 200 OK
+
+[FocusCard appears in Chrome extension]
+
+[User clicks "I'm back"]
+
+→ Focus recovery logged
+→ Session metrics updated:
+  - Recoveries: 1
+  - Minutes saved: 6
+
+---
+
+$ # This terminal output demonstrates the full intervention loop
+$ # for use in the Loom demo video and pitch deck screenshots

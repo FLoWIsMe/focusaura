@@ -1,0 +1,72 @@
+FocusAura Pitch Script
+Hackathon Demo (90 seconds)
+
+[SCENE 1: THE PROBLEM - 20 seconds]
+
+You're deep in flow, 42 minutes into writing your project proposal.
+
+Then—a notification. YouTube. Just one video.
+
+23 minutes later, you're watching "Top 10 Most Expensive Yachts."
+
+Your deadline? 3 PM today. The cost of that distraction? Real.
+
+[SCENE 2: THE SOLUTION - 30 seconds]
+
+This is FocusAura.
+
+An AI focus assistant that senses the moment you drift—
+and brings you back, gently, with science-backed interventions.
+
+[Show extension icon → distraction event → FocusCard appears]
+
+Not generic advice. Personalized guidance, synthesized in real time from:
+→ You.com Web Search API: evidence-based techniques
+→ You.com News API: recent behavioral science studies
+→ You.com Smart/Research API: personalized synthesis
+
+All in under 500 milliseconds.
+
+[SCENE 3: THE DEMO - 30 seconds]
+
+Watch.
+
+[Click "Simulate Distraction" button]
+
+→ FocusAura detects I switched to YouTube
+→ Calls backend → You.com APIs reason over the context
+→ Returns: "Take a 90-second walk—no phone."
+
+[FocusCard appears with intervention]
+
+Action. Reasoning. Citation. My goal, restated.
+
+[Click "I'm back"]
+
+→ Recovery logged. Minutes saved: 6.
+
+[SCENE 4: THE VISION - 10 seconds]
+
+FocusAura is search, reimagined.
+
+Not pull-based. Push-based.
+
+Not reactive. Proactive.
+
+The right answer, at the right moment, for the person who needs it most.
+
+This is the future You.com is building.
+
+[END CARD]
+FocusAura
+Built with You.com APIs
+Hackathon 2025
+
+---
+
+KEY TALKING POINTS FOR JUDGES:
+- Privacy-first: We send abstract context, not raw content
+- You.com alignment: Demonstrates "search → reason → act" in real time
+- Real APIs: Web Search, News, Smart/Research—all integrated
+- Production path: Clear roadmap from MVP to scalable product
+- Market fit: 2.5B knowledge workers lose 28% of their day to distractions (McKinsey)

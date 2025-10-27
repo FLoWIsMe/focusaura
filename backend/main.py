@@ -1,0 +1,121 @@
+"""
+FocusAura FastAPI Backend
+
+This service receives distraction events from the Chrome extension,
+calls You.com APIs to generate evidence-based interventions,
+and returns structured guidance to help users recover focus.
+"""
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from logic.compose_intervention import compose_intervention
+
+app = FastAPI(
+    title="FocusAura API",
+    description="AI focus assistant backend powered by You.com intelligence",
+    version="0.1.0"
+)
+
+# CORS configuration for Chrome extension development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",  # Vite default port
+        "chrome-extension://*"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class FocusEvent(BaseModel):
+    """
+    Represents a distraction event detected by the extension.
+
+    Fields:
+        goal: User's stated objective (e.g., "Finish project proposal by 3 PM")
+        context_title: Title of the work context (e.g., "Project_Proposal.docx")
+        context_app: Application or site user was working in (e.g., "Google Docs")
+        time_on_task_minutes: How long user was focused before distraction
+        event: Type of distraction (e.g., "switched_to_youtube", "idle_timeout")
+    """
+    goal: str = Field(..., description="User's current work goal")
+    context_title: str = Field(..., description="Title of work context")
+    context_app: str = Field(..., description="Application or site name")
+    time_on_task_minutes: int = Field(..., ge=0, description="Minutes on task before distraction")
+    event: str = Field(..., description="Distraction event type")
+
+
+class InterventionResponse(BaseModel):
+    """
+    Structured intervention returned to the extension.
+
+    This is the "micro-intervention" that appears in the FocusCard overlay.
+    """
+    action_now: str = Field(..., description="Immediate action to take (1 sentence)")
+    why_it_works: str = Field(..., description="Scientific reasoning (1-2 sentences)")
+    goal_reminder: str = Field(..., description="User's goal, restated")
+    citation: str = Field(..., description="Source attribution for advice")
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {
+        "service": "FocusAura API",
+        "status": "running",
+        "message": "Ready to generate focus interventions"
+    }
+
+
+@app.post("/intervention", response_model=InterventionResponse)
+async def create_intervention(event: FocusEvent):
+    """
+    Generate a personalized focus intervention based on distraction context.
+
+    This endpoint:
+    1. Receives a FocusEvent from the Chrome extension
+    2. Calls compose_intervention() which orchestrates You.com API calls
+    3. Returns a structured InterventionResponse with actionable guidance
+
+    In production, this would call:
+    - You.com Web Search API for focus technique evidence
+    - You.com News API for recent behavioral science studies
+    - You.com Smart/Research API to synthesize personalized advice
+    """
+    try:
+        intervention = await compose_intervention(event)
+        return intervention
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate intervention: {str(e)}"
+        )
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Detailed health check for monitoring.
+
+    In production, this would verify:
+    - You.com API connectivity
+    - API key validity
+    - Rate limit status
+    """
+    return {
+        "status": "healthy",
+        "apis": {
+            "you_web_search": "ready",  # TODO: actual health check
+            "you_news": "ready",
+            "you_smart_research": "ready"
+        }
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,171 @@
+/**
+ * FocusCard Overlay Styles
+ *
+ * The intervention card that appears when a distraction is detected.
+ * Uses glassmorphism effect for a calm, modern look.
+ */
+
+.focus-card-overlay {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 999999;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.focus-card {
+  width: 380px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.card-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+.powered-by {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+.action-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.action-header {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #667eea;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.action-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+.why-section {
+  margin-bottom: 16px;
+}
+
+.why-header {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #999;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.why-text {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.citation {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+}
+
+.reminder-section {
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border-left: 3px solid #667eea;
+  padding: 10px 12px;
+  border-radius: 4px;
+}
+
+.reminder-text {
+  font-size: 13px;
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.card-footer {
+  display: flex;
+  gap: 10px;
+  padding: 16px 20px;
+  background: #f8f9fa;
+}
+
+.btn-back,
+.btn-later {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-back {
+  background: #667eea;
+  color: white;
+}
+
+.btn-back:hover {
+  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-later {
+  background: white;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.btn-later:hover {
+  background: #f8f9fa;
+  border-color: #bbb;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 420px) {
+  .focus-card {
+    width: calc(100vw - 40px);
+  }
+}
