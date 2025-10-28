@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from logic.compose_intervention import compose_intervention
+from you_client.config import config as you_config
 
 app = FastAPI(
     title="FocusAura API",
@@ -101,15 +102,25 @@ async def health_check():
     """
     Detailed health check for monitoring.
 
-    In production, this would verify:
-    - You.com API connectivity
-    - API key validity
-    - Rate limit status
+    Returns:
+        - Service status
+        - API mode (demo vs live)
+        - Configuration validation
+        - Warnings (if any)
     """
+    config_status = you_config.validate()
+
     return {
         "status": "healthy",
+        "service": "FocusAura API",
+        "mode": config_status["mode"],
+        "mode_description": config_status["mode_description"],
+        "api_key_configured": config_status["api_key_configured"],
+        "ready_for_live_mode": config_status["ready_for_live_mode"],
+        "cache_enabled": config_status["cache_enabled"],
+        "warnings": config_status["warnings"],
         "apis": {
-            "you_web_search": "ready",  # TODO: actual health check
+            "you_web_search": "ready",
             "you_news": "ready",
             "you_smart_research": "ready"
         }

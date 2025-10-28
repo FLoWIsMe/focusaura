@@ -8,11 +8,19 @@ context-aware advice for the user.
 This is the "reasoning" layer that turns raw search results into
 actionable micro-interventions tailored to the user's specific situation.
 
+Supports dual-mode operation:
+- Demo Mode: Returns template-based responses
+- Live Mode: Calls real You.com RAG/Chat API
+
 API Documentation: https://documentation.you.com/
 """
 
-import httpx
+import logging
 from typing import Dict
+from .config import config
+from .base_client import YouAPIClient, YouAPIError
+
+logger = logging.getLogger(__name__)
 
 
 async def query_smart_research(research_query: Dict) -> str:
@@ -29,61 +37,142 @@ async def query_smart_research(research_query: Dict) -> str:
     Returns:
         String containing synthesized, personalized intervention advice
 
-    TODO: Actual Implementation
-    ---------------------------
-    1. Get You.com API key from environment variable
-    2. Construct synthesis prompt that includes:
-       - User context (goal, time on task, distraction)
-       - Findings from Web Search API
-       - Recent studies from News API
-       - Request for personalized action
-    3. Call You.com Smart/Research API endpoint:
-       - This API uses LLM-powered synthesis
-       - It should reason over the provided context
-       - Return a single, coherent recommendation
-    4. Parse response to extract:
-       - Primary recommended action
-       - Reasoning grounded in the provided research
-       - Confidence/relevance score
-    5. Return formatted string for final intervention composition
-
-    Example API call structure:
-    ```python
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "https://api.you.com/smart",
-            headers={"X-API-Key": api_key},
-            json={
-                "query": research_query["synthesis_prompt"],
-                "context": {
-                    "web_results": research_query["web_findings"],
-                    "news_results": research_query["recent_studies"]
-                }
-            }
-        )
-    ```
-
-    This API is key to FocusAura's value proposition:
-    Instead of showing generic advice, we synthesize real-time research
-    into a single action personalized to THIS user at THIS moment.
+    Mode Behavior:
+        - Demo Mode: Returns curated template responses
+        - Live Mode: Calls You.com RAG/Chat API, falls back to templates on error
     """
 
-    # MVP: Return dummy synthesized data for demo purposes
+    # Check mode
+    if config.is_demo_mode():
+        logger.info("Smart Research: Using demo mode (templates)")
+        return _get_template_response(research_query)
+
+    # Live mode - try real API
+    if not config.has_api_key():
+        logger.warning("Smart Research: Live mode but no API key - falling back to templates")
+        return _get_template_response(research_query)
+
+    # Extract context
+    user_ctx = research_query.get("user_context", {})
+    synthesis_prompt = research_query.get("synthesis_prompt", "")
+    web_findings = research_query.get("web_findings", "")
+    recent_studies = research_query.get("recent_studies", "")
+
+    # Build comprehensive prompt for RAG
+    full_prompt = f"""
+{synthesis_prompt}
+
+Context from web search:
+{web_findings}
+
+Recent research findings:
+{recent_studies}
+
+Please synthesize this information into a single, actionable recommendation
+for this specific user's situation. Focus on the most effective immediate action.
+    """.strip()
+
+    logger.info("Smart Research: Querying You.com RAG/Chat API")
+
+    try:
+        client = YouAPIClient()
+        
+        # Try RAG endpoint first
+        try:
+            response = await client.post(
+                config.RAG_ENDPOINT,
+                json={
+                    "query": full_prompt,
+                    "context": {
+                        "goal": user_ctx.get("goal", ""),
+                        "time_on_task": user_ctx.get("time_on_task", 0),
+                        "distraction": user_ctx.get("distraction", "")
+                    }
+                }
+            )
+        except:
+            # Fall back to chat endpoint
+            response = await client.post(
+                config.CHAT_ENDPOINT,
+                json={
+                    "messages": [
+                        {"role": "system", "content": "You are a focus recovery advisor helping knowledge workers get back to deep work."},
+                        {"role": "user", "content": full_prompt}
+                    ]
+                }
+            )
+
+        # Extract synthesis from response
+        synthesis = _extract_synthesis(response)
+        logger.info("Smart Research: Successfully generated synthesis")
+        return synthesis
+
+    except YouAPIError as e:
+        logger.error(f"Smart Research API error: {e} - falling back to templates")
+        return _get_template_response(research_query)
+
+    except Exception as e:
+        logger.error(f"Smart Research unexpected error: {e} - falling back to templates")
+        return _get_template_response(research_query)
+
+
+def _extract_synthesis(response: Dict) -> str:
+    """
+    Extract synthesis text from API response.
+
+    Handles multiple response formats (RAG vs Chat).
+    """
+    # Try RAG response format
+    if "answer" in response:
+        return f"Smart Synthesis (via You.com API):\n{response['answer']}"
+    
+    # Try chat response format
+    if "choices" in response:
+        choices = response.get("choices", [])
+        if choices:
+            message = choices[0].get("message", {})
+            content = message.get("content", "")
+            return f"Smart Synthesis (via You.com API):\n{content}"
+    
+    # Try direct message format
+    if "message" in response:
+        return f"Smart Synthesis (via You.com API):\n{response['message']}"
+    
+    logger.warning("Could not extract synthesis from API response")
+    return "Smart Synthesis: Unable to parse API response"
+
+
+def _get_template_response(research_query: Dict) -> str:
+    """
+    Return template-based response for demo mode or fallback.
+
+    Customizes response based on user context.
+    """
     user_ctx = research_query.get("user_context", {})
     time_on_task = user_ctx.get("time_on_task", 0)
     goal = user_ctx.get("goal", "your task")
+    distraction = user_ctx.get("distraction", "")
+
+    # Customize based on distraction and time investment
+    if time_on_task >= 30:
+        investment_note = f"You've already invested {time_on_task} minutes - that momentum is valuable."
+    else:
+        investment_note = "Getting back on track quickly will save you significant time."
+
+    if "youtube" in distraction.lower() or "video" in distraction.lower():
+        action = "a 90-second physical reset (walk or stretch) followed immediately by a 25-minute time-boxed work block"
+        reasoning = "This combines Stanford's context-switch research (physical movement resets attention) with MIT's break duration findings"
+    elif "social" in distraction.lower():
+        action = "closing all tabs, setting a visible 25-minute timer, and writing one sentence about your next action"
+        reasoning = "This creates a clean slate (reduces cognitive load from social media) and activates implementation intentions"
+    else:
+        action = "a 90-second physical reset followed by a clear, time-boxed work session"
+        reasoning = "Brief physical activity resets the prefrontal cortex while time constraints activate focus"
 
     return (
         f"Smart Synthesis:\n"
-        f"Given your {time_on_task}-minute focus session on '{goal}', "
-        "the optimal recovery action is a 90-second physical reset (walk or stretch) "
-        "followed immediately by a 25-minute time-boxed work block. "
-        "This approach combines Stanford's context-switch research with MIT's break duration findings. "
-        "Your invested time makes full recovery highly likely.\n"
-        "[Source: You.com Smart/Research API synthesis]"
+        f"Given your context ('{goal}', {time_on_task} minutes invested), "
+        f"the optimal recovery action is {action}. "
+        f"{reasoning}. {investment_note}\n"
+        "[Source: Synthesized from focus recovery research]"
     )
-
-    # TODO: Replace above with actual You.com Smart/Research API call
-    # api_key = os.getenv("YOU_API_KEY")
-    # prompt = research_query["synthesis_prompt"]
-    # ... (actual implementation)
