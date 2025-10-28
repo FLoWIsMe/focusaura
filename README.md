@@ -28,33 +28,88 @@ Chrome Extension
     └─→ Shows FocusCard overlay with nudge
 ```
 
-## Local Development
+## Quick Start
 
-### Backend Setup
+### Prerequisites
 
+- Python 3.11+
+- Node.js 18+
+- Chrome browser
+
+### Running Locally (Full Stack)
+
+**Option 1: Development Mode (Recommended for Testing)**
+
+Open two terminal windows:
+
+**Terminal 1 - Backend:**
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --port 8000
 ```
 
-The FastAPI server will run on `http://localhost:8000`. Visit `/docs` for the interactive API documentation.
-
-### Extension Setup
-
+**Terminal 2 - Frontend:**
 ```bash
 cd extension
 npm install
 npm run dev
 ```
 
-Then load the extension in Chrome:
-1. Navigate to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `extension/dist` folder (generated after build)
+Then open your browser to **http://localhost:5173** and test the full flow!
 
-For development, you can test the intervention flow using the "Simulate Distraction" button in the popup UI.
+The backend API docs will be available at **http://localhost:8000/docs**
+
+---
+
+**Option 2: Chrome Extension Mode (Production-like)**
+
+**Step 1 - Start Backend:**
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+**Step 2 - Build Extension:**
+```bash
+cd extension
+npm install
+npm run build
+cp public/manifest.json dist/
+cp public/icon*.png dist/ 2>/dev/null || true
+```
+
+**Step 3 - Load in Chrome:**
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" (toggle in top-right corner)
+3. Click "Load unpacked"
+4. Select the `extension/dist` folder
+5. Click the FocusAura extension icon in your Chrome toolbar
+
+---
+
+### Testing the Demo
+
+1. **Set a goal**: "Finish Section 2 by 3 PM"
+2. Click **"Save Goal"**
+3. Click the yellow **"🎬 Simulate Distraction (Demo)"** button
+4. Watch the **FocusCard** appear with personalized intervention
+5. Click **"I'm back"** to log recovery and see metrics update
+
+### Current API Implementation
+
+⚠️ **Note**: The MVP uses **template-based responses** for the demo. Real You.com API integration requires:
+
+1. Get API key from You.com hackathon organizers
+2. Create `backend/.env` file:
+   ```bash
+   YOU_API_KEY=your_api_key_here
+   ```
+3. Uncomment TODO sections in `backend/you_client/*.py` files
+4. Replace dummy returns with actual API calls
+
+This approach allows you to demo the full UX flow immediately without waiting for API credentials.
 
 ## Security & Privacy Positioning
 
