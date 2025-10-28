@@ -22,6 +22,7 @@ dist/
 
 # IDE
 .vscode/
+.claude/
 .idea/
 *.swp
 *.swo
