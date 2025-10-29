@@ -22,12 +22,14 @@ class YouAPIConfig:
     # Mode: "demo" (templates) or "live" (real API calls)
     MODE: Literal["demo", "live"] = os.getenv("YOU_API_MODE", "demo")  # type: ignore
 
-    # API Endpoints (based on documentation research)
+    # API Endpoints (based on You.com API documentation)
+    # Smart API is the main endpoint for RAG-powered responses
+    SMART_API_URL: str = "https://chat-api.you.com/smart"
+
+    # Legacy endpoints (may not be accessible with all API keys)
     BASE_URL: str = "https://api.ydc-index.io"
     SEARCH_ENDPOINT: str = f"{BASE_URL}/search"
     NEWS_ENDPOINT: str = f"{BASE_URL}/news"
-    RAG_ENDPOINT: str = f"{BASE_URL}/rag"
-    CHAT_ENDPOINT: str = f"{BASE_URL}/chat"
 
     # Timeouts
     API_TIMEOUT: float = float(os.getenv("YOU_API_TIMEOUT", "10"))
