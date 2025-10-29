@@ -1,13 +1,13 @@
 """
-You.com Smart API Client
+You.com Agents API Client
 
-Unified client for You.com's Smart API endpoint which provides:
-- Web search with RAG
-- Real-time information synthesis
-- Citation-backed responses
+Client for You.com's Agents API v1 which provides:
+- AI-powered agent responses
+- Express mode for quick answers
+- Research-backed productivity advice
 
 API Documentation: https://documentation.you.com/
-Endpoint: https://chat-api.you.com/smart
+Endpoint: https://api.you.com/v1/agents/runs
 """
 
 import logging
@@ -19,86 +19,85 @@ from .base_client import YouAPIClient, YouAPIError
 logger = logging.getLogger(__name__)
 
 
-async def query_smart_api(
-    query: str,
-    instructions: Optional[str] = None,
-    chat_id: Optional[str] = None
+async def query_agents_api(
+    input_text: str,
+    agent: str = "express"
 ) -> Dict:
     """
-    Query You.com Smart API for RAG-powered responses.
+    Query You.com Agents API for AI-powered responses.
 
     Args:
-        query: The main question or statement to be answered
-        instructions: Custom commands to tailor the response (optional)
-        chat_id: UUID to maintain conversation continuity (optional)
+        input_text: The question or prompt to send to the agent
+        agent: The agent to use (default: "express" for quick answers)
 
     Returns:
         Dict with:
-            - answer: str - The main response
-            - search_results: list - List of cited sources
+            - answer: str - The main response text
+            - citations: list - List of sources (if available)
 
     Example Response:
     {
         "answer": "Evidence-based focus recovery techniques include...",
-        "search_results": [
-            {
-                "url": "https://...",
-                "name": "Study Title",
-                "snippet": "..."
-            }
-        ]
+        "citations": []
     }
     """
 
     # Check mode
     if config.is_demo_mode():
-        logger.info("Smart API: Using demo mode (templates)")
-        return _get_template_response(query)
+        logger.info("Agents API: Using demo mode (templates)")
+        return _get_template_response(input_text)
 
     # Live mode - try real API
     if not config.has_api_key():
-        logger.warning("Smart API: Live mode but no API key - falling back to templates")
-        return _get_template_response(query)
-
-    # Generate chat_id if not provided
-    if not chat_id:
-        chat_id = str(uuid.uuid4())
+        logger.warning("Agents API: Live mode but no API key - falling back to templates")
+        return _get_template_response(input_text)
 
     request_body = {
-        "query": query,
-        "chat_id": chat_id,
-        "instructions": instructions or ""
+        "agent": agent,
+        "input": input_text,
+        "stream": False,
+        "tools": []
     }
 
-    logger.info(f"Smart API: Querying with: {query[:100]}...")
+    logger.info(f"Agents API: Querying with agent '{agent}': {input_text[:100]}...")
     if config.DEBUG:
-        logger.debug(f"Smart API Request: {request_body}")
+        logger.debug(f"Agents API Request: {request_body}")
 
     try:
         client = YouAPIClient()
         response = await client.post(
-            config.SMART_API_URL,
+            config.AGENTS_API_URL,
             json=request_body
         )
 
-        # Response format: {"answer": "...", "search_results": [...]}
-        answer = response.get("answer", "")
-        search_results = response.get("search_results", [])
+        # Response format: {"output": [{"text": "...", "type": "message.answer"}], ...}
+        output = response.get("output", [])
+        answer_text = ""
 
-        logger.info(f"Smart API: Success! Got {len(search_results)} search results")
+        # Extract the answer from output array
+        for item in output:
+            if item.get("type") == "message.answer":
+                answer_text = item.get("text", "")
+                break
+
+        if not answer_text and output:
+            # Fallback: use first item's text if no answer type found
+            answer_text = output[0].get("text", "")
+
+        logger.info(f"Agents API: Success! Got response ({len(answer_text)} chars)")
 
         return {
-            "answer": answer,
-            "search_results": search_results
+            "answer": answer_text,
+            "citations": []  # Agents API doesn't provide citations in the same format
         }
 
     except YouAPIError as e:
-        logger.error(f"Smart API error: {e} - falling back to templates")
-        return _get_template_response(query)
+        logger.error(f"Agents API error: {e} - falling back to templates")
+        return _get_template_response(input_text)
 
     except Exception as e:
-        logger.error(f"Smart API unexpected error: {e} - falling back to templates")
-        return _get_template_response(query)
+        logger.error(f"Agents API unexpected error: {e} - falling back to templates")
+        return _get_template_response(input_text)
 
 
 def _get_template_response(query: str) -> Dict:

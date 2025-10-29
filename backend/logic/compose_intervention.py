@@ -1,12 +1,12 @@
 """
 Intervention Composition Logic
 
-This module orchestrates calls to You.com Smart API to generate
+This module orchestrates calls to You.com Agents API to generate
 personalized, evidence-based focus interventions.
 
 Flow:
 1. Receive FocusEvent with user context
-2. Call You.com Smart API with contextual query
+2. Call You.com Agents API with contextual prompt
 3. Parse response and extract intervention components
 4. Return structured InterventionResponse
 """
@@ -14,8 +14,8 @@ Flow:
 from typing import Dict
 import logging
 
-# You.com Smart API client
-from you_client.smart_api import query_smart_api
+# You.com Agents API client
+from you_client.smart_api import query_agents_api
 
 logger = logging.getLogger(__name__)
 
@@ -41,51 +41,36 @@ async def compose_intervention(event) -> Dict[str, str]:
     distraction_type = event.event
     context_title = event.context_title
 
-    # Build contextualized query for Smart API
-    query = f"""
-You are a focus recovery advisor helping a knowledge worker get back to deep work.
+    # Build contextualized prompt for Agents API
+    prompt = f"""I have been working on "{user_goal}" for {time_on_task} minutes in {context_title}, but I got distracted by {distraction_type}.
 
-Context:
-- User's goal: {user_goal}
-- Time already invested: {time_on_task} minutes
-- Work context: {context_title}
-- Distraction: {distraction_type}
+Give me ONE specific, research-backed technique to recover my focus immediately. Base your advice on neuroscience and productivity research. Keep it concise and motivating.
 
-Provide ONE specific, actionable technique to help them recover focus immediately.
-Base your advice on neuroscience and productivity research.
-Keep it concise and motivating.
-""".strip()
-
-    # Optional: Custom instructions to shape the response
-    instructions = """
 Format your response as:
 1. One specific immediate action (20-30 words)
 2. Brief scientific reasoning why it works (40-50 words)
 3. Reference to the research/source
 
-Be direct, practical, and encouraging. Focus on what they should do RIGHT NOW.
-""".strip()
+Be direct, practical, and encouraging. Focus on what I should do RIGHT NOW."""
 
     logger.info(f"Generating intervention for: {distraction_type} (goal: {user_goal})")
 
     try:
-        # Call You.com Smart API
-        response = await query_smart_api(
-            query=query,
-            instructions=instructions
+        # Call You.com Agents API
+        response = await query_agents_api(
+            input_text=prompt,
+            agent="express"
         )
 
-        # Parse the Smart API response
+        # Parse the Agents API response
         answer = response.get("answer", "")
-        search_results = response.get("search_results", [])
+        citations = response.get("citations", [])
 
         # Extract components from the answer
-        intervention = _parse_smart_api_response(
+        intervention = _parse_agents_api_response(
             answer=answer,
-            search_results=search_results,
-            user_goal=user_goal,
-            time_on_task=time_on_task,
-            distraction_type=distraction_type
+            citations=citations,
+            user_goal=user_goal
         )
 
         logger.info("Intervention generated successfully")
@@ -97,17 +82,15 @@ Be direct, practical, and encouraging. Focus on what they should do RIGHT NOW.
         return _generate_fallback_intervention(event)
 
 
-def _parse_smart_api_response(
+def _parse_agents_api_response(
     answer: str,
-    search_results: list,
-    user_goal: str,
-    time_on_task: int,
-    distraction_type: str
+    citations: list,
+    user_goal: str
 ) -> Dict[str, str]:
     """
-    Parse Smart API response into intervention components.
+    Parse Agents API response into intervention components.
 
-    The Smart API returns a comprehensive answer with citations.
+    The Agents API returns a comprehensive answer in markdown format.
     We need to extract:
     - action_now: The immediate action to take
     - why_it_works: The reasoning/evidence
@@ -125,40 +108,48 @@ def _parse_smart_api_response(
 
     # Simple heuristic parsing
     for i, line in enumerate(lines):
-        if not action_now and (line.startswith('1.') or len(line) > 20):
-            # First substantial line or numbered item is likely the action
-            action_now = line.lstrip('1.').strip()
-        elif not why_it_works and i > 0 and (line.startswith('2.') or 'research' in line.lower() or 'study' in line.lower()):
-            # Second item or line mentioning research is likely the reasoning
-            why_it_works = line.lstrip('2.').strip()
+        # Skip markdown headers
+        if line.startswith('#'):
+            continue
 
-    # Extract citation from search results
-    if search_results:
-        first_result = search_results[0]
-        source_name = first_result.get("name", "")
-        # Extract author/institution from source name
-        citation = source_name.split(" - ")[0] if " - " in source_name else source_name
+        if not action_now and (line.startswith('1.') or line.startswith('**') or len(line) > 20):
+            # First substantial line or numbered item is likely the action
+            action_now = line.lstrip('1.').strip().strip('*').strip()
+        elif not why_it_works and i > 0 and (line.startswith('2.') or 'research' in line.lower() or 'study' in line.lower() or 'pomodoro' in line.lower()):
+            # Second item or line mentioning research is likely the reasoning
+            why_it_works = line.lstrip('2.').strip().strip('*').strip()
+
+    # Extract citation from citations list if provided
+    if citations:
+        citation = citations[0] if isinstance(citations[0], str) else str(citations[0])
 
     # Fallback: if parsing failed, use full answer as reasoning
     if not action_now:
-        # Use first sentence as action
-        sentences = answer.split('.')
-        action_now = sentences[0].strip() + '.' if sentences else answer[:100]
+        # Use first meaningful paragraph as action
+        for line in lines:
+            if line and not line.startswith('#') and len(line) > 20:
+                action_now = line[:200]
+                break
 
     if not why_it_works:
-        # Use rest as reasoning
-        why_it_works = '. '.join(answer.split('.')[1:3]).strip()
+        # Use second paragraph or full answer
+        for i, line in enumerate(lines):
+            if i > 0 and line and not line.startswith('#') and len(line) > 20:
+                why_it_works = line[:300]
+                break
+        if not why_it_works:
+            why_it_works = answer[:300]
 
     if not citation:
-        citation = "You.com Smart API synthesis"
+        citation = "You.com AI Research"
 
-    # Clean up
-    action_now = action_now[:200]  # Limit length
-    why_it_works = why_it_works[:300]
+    # Clean up markdown formatting
+    action_now = action_now.strip('*').strip()
+    why_it_works = why_it_works.strip('*').strip()
 
     return {
         "action_now": action_now or "Take a 90-second walk, then return to work.",
-        "why_it_works": why_it_works or f"Brief breaks reset attention. You've invested {time_on_task} minutes—maintain momentum.",
+        "why_it_works": why_it_works or "Brief breaks reset attention and restore focus.",
         "goal_reminder": f"Your goal: {user_goal}",
         "citation": citation or "Focus recovery research"
     }

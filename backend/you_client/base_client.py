@@ -42,7 +42,7 @@ class YouAPIClient:
         }
 
         if config.has_api_key():
-            headers["X-API-Key"] = config.API_KEY
+            headers["Authorization"] = f"Bearer {config.API_KEY}"
 
         return headers
 
