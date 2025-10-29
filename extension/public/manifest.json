@@ -26,9 +26,6 @@
     "http://localhost:8000/*",
     "<all_urls>"
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
