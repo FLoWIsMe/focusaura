@@ -103,3 +103,56 @@ Your FocusAura project is:
 - ✅ Impressive
 
 **Good luck at the hackathon!** 🚀
+
+## 🔧 Common Issues & Solutions
+
+### "Could not load background script" Error
+
+**Symptom**: Extension fails to load in Chrome/Edge
+
+**Solution**:
+```bash
+cd extension
+npm run build
+cp public/manifest.json dist/
+cp public/icon*.png dist/
+```
+
+Then reload the extension in Chrome:
+1. Go to `chrome://extensions/`
+2. Click the reload button on FocusAura
+3. Or remove and re-add the extension
+
+**Why**: The manifest.json needs to be copied to the dist/ folder after building.
+
+### Extension Shows Blank Popup
+
+**Symptom**: Clicking extension icon shows empty popup
+
+**Solution**: You're likely loading the production build without the backend running.
+
+**Better approach for development**:
+```bash
+# Don't use: npm run build
+# Instead use: npm run dev
+
+cd extension
+npm run dev
+# Visit http://localhost:5173 directly in browser
+```
+
+### Can't Connect to Backend
+
+**Symptom**: "Failed to get intervention" error
+
+**Solution**: Make sure backend is running:
+```bash
+cd backend
+uvicorn main:app --reload --port 8000
+```
+
+Check it's working: `curl http://localhost:8000/health`
+
+---
+
+**Updated**: October 28, 2025 - Added extension loading fix
