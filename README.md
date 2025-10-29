@@ -32,13 +32,23 @@ Chrome Extension
 
 ### Prerequisites
 
-- Python 3.11+
-- Node.js 18+
+- **Option A (Docker)**: Docker Desktop installed
+- **Option B (Local)**: Python 3.11+, Node.js 18+
 - Chrome browser
+- You.com API key
 
-### Running Locally (Full Stack)
+### Running Locally
 
-**Option 1: Development Mode (Recommended for Testing)**
+**Option 1: Docker (Easiest)**
+
+```bash
+# From project root
+docker compose up
+```
+
+Backend runs at `http://localhost:8000`. See [DOCKER.md](DOCKER.md) for full Docker documentation.
+
+**Option 2: Development Mode (Local Python)**
 
 Open two terminal windows:
 
