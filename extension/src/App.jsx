@@ -148,6 +148,23 @@ function App() {
     setShowFocusCard(false);
   };
 
+  /**
+   * Reload the extension for quick development iteration.
+   * Uses chrome.runtime.reload() API.
+   */
+  const reloadExtension = () => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime) {
+        console.log('🔄 Reloading extension...');
+        chrome.runtime.reload();
+      } else {
+        console.log('chrome.runtime not available (probably in dev mode)');
+      }
+    } catch (error) {
+      console.error('Failed to reload extension:', error);
+    }
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -175,11 +192,29 @@ function App() {
             className="simulate-btn"
             onClick={simulateDistraction}
           >
-            🎬 Simulate Distraction (Demo)
+            🎬 Simulate Distractiona (Demo)
           </button>
           <p className="dev-note">
             For judges: This triggers the full intervention flow
           </p>
+          
+          {/* Quick reload button for development */}
+          <button
+            className="reload-btn"
+            onClick={reloadExtension}
+            style={{
+              marginTop: '10px',
+              padding: '8px 16px',
+              backgroundColor: '#6366f1',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            🔄 Reload Extension
+          </button>
         </div>
       </main>
 
