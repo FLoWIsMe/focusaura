@@ -15,12 +15,16 @@
     },
     "default_title": "FocusAura - AI Focus Assistant"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "permissions": [
     "tabs",
     "storage",
     "activeTab",
     "scripting",
-    "idle"
+    "idle",
+    "notifications"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
