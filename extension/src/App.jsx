@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import GoalSetter from './components/GoalSetter';
 import DashboardPopup from './components/DashboardPopup';
 import FocusCard from './components/FocusCard';
+import SessionControl from './components/SessionControl';
 
 /**
  * Main App component for FocusAura extension popup.
@@ -9,6 +10,7 @@ import FocusCard from './components/FocusCard';
  * This is what users see when they click the extension icon.
  * Contains:
  * - Goal setting interface
+ * - Session start/end controls
  * - Dashboard with recovery metrics
  * - Developer simulation button for testing
  */
@@ -16,6 +18,11 @@ function App() {
   // User's current goal
   const [goal, setGoal] = useState('');
   const [deadline, setDeadline] = useState('');
+
+  // Session state
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [totalSessionTime, setTotalSessionTime] = useState(0);
 
   // Recovery metrics
   const [focusRecoveriesCount, setFocusRecoveriesCount] = useState(0);
@@ -25,7 +32,7 @@ function App() {
   const [currentIntervention, setCurrentIntervention] = useState(null);
   const [showFocusCard, setShowFocusCard] = useState(false);
 
-  // Load saved goal and metrics from chrome.storage on mount
+  // Load saved goal, session state, and metrics from chrome.storage on mount
   useEffect(() => {
     loadStoredData();
   }, []);
@@ -35,12 +42,17 @@ function App() {
       // Try to load from chrome.storage (will work in extension context)
       if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.local.get(
-          ['goal', 'deadline', 'recoveries', 'minutesSaved'],
+          ['goal', 'deadline', 'recoveries', 'minutesSaved', 'isSessionActive', 'sessionStartTime', 'totalSessionTime'],
           (result) => {
             if (result.goal) setGoal(result.goal);
             if (result.deadline) setDeadline(result.deadline);
             if (result.recoveries) setFocusRecoveriesCount(result.recoveries);
             if (result.minutesSaved) setMinutesSaved(result.minutesSaved);
+            if (result.isSessionActive) {
+              setIsSessionActive(true);
+              setSessionStartTime(result.sessionStartTime);
+            }
+            if (result.totalSessionTime) setTotalSessionTime(result.totalSessionTime);
           }
         );
       }
@@ -61,6 +73,91 @@ function App() {
     } catch (error) {
       console.log('Running in dev mode, chrome.storage not available');
     }
+  };
+
+  /**
+   * Start a new focus session.
+   * Notifies background script to begin monitoring.
+   */
+  const handleStartSession = () => {
+    if (!goal || goal.trim().length === 0) {
+      console.error('Cannot start session without a goal');
+      return;
+    }
+
+    const startTime = Date.now();
+    setIsSessionActive(true);
+    setSessionStartTime(startTime);
+
+    // Save session state to storage
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({
+          isSessionActive: true,
+          sessionStartTime: startTime,
+          sessionGoal: goal
+        });
+
+        // Notify background script to start monitoring
+        chrome.runtime.sendMessage({
+          type: 'START_SESSION',
+          goal: goal,
+          startTime: startTime
+        }, (response) => {
+          console.log('✅ Session started:', response);
+        });
+      }
+    } catch (error) {
+      console.log('Running in dev mode, chrome APIs not available');
+    }
+
+    console.log('🎯 Focus session started:', { goal, startTime: new Date(startTime).toISOString() });
+  };
+
+  /**
+   * End the current focus session.
+   * Notifies background script to stop monitoring and records session duration.
+   */
+  const handleEndSession = () => {
+    if (!isSessionActive || !sessionStartTime) {
+      console.error('No active session to end');
+      return;
+    }
+
+    const endTime = Date.now();
+    const sessionDuration = Math.floor((endTime - sessionStartTime) / 1000); // in seconds
+    const newTotalTime = totalSessionTime + sessionDuration;
+
+    setIsSessionActive(false);
+    setSessionStartTime(null);
+    setTotalSessionTime(newTotalTime);
+
+    // Save session state to storage
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.local.set({
+          isSessionActive: false,
+          sessionStartTime: null,
+          totalSessionTime: newTotalTime
+        });
+
+        // Notify background script to stop monitoring
+        chrome.runtime.sendMessage({
+          type: 'END_SESSION',
+          duration: sessionDuration,
+          endTime: endTime
+        }, (response) => {
+          console.log('✅ Session ended:', response);
+        });
+      }
+    } catch (error) {
+      console.log('Running in dev mode, chrome APIs not available');
+    }
+
+    console.log('🛑 Focus session ended:', {
+      duration: `${Math.floor(sessionDuration / 60)} minutes ${sessionDuration % 60} seconds`,
+      totalTime: `${Math.floor(newTotalTime / 60)} minutes`
+    });
   };
 
   /**
@@ -179,11 +276,20 @@ function App() {
           onSave={handleGoalSave}
         />
 
+        <SessionControl
+          isSessionActive={isSessionActive}
+          onStartSession={handleStartSession}
+          onEndSession={handleEndSession}
+          sessionStartTime={sessionStartTime}
+          goal={goal}
+        />
+
         <DashboardPopup
           goal={goal}
           deadline={deadline}
           focusRecoveriesCount={focusRecoveriesCount}
           minutesSaved={minutesSaved}
+          totalSessionTime={totalSessionTime}
         />
 
         {/* Developer demo button */}

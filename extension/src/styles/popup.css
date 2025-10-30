@@ -144,6 +144,157 @@ body {
   font-size: 12px;
 }
 
+/* Session Control Styles */
+.session-control {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.session-control.active {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border: 2px solid #4caf50;
+}
+
+.session-control.inactive {
+  background: white;
+}
+
+.session-header h3 {
+  font-size: 16px;
+  margin-bottom: 12px;
+  color: #1a1a1a;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  background: #4caf50;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.1);
+  }
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2e7d32;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.session-timer {
+  text-align: center;
+  margin: 20px 0;
+}
+
+.timer-display {
+  font-size: 48px;
+  font-weight: 700;
+  color: #2e7d32;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 8px;
+}
+
+.timer-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.start-session-btn,
+.end-session-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 12px;
+}
+
+.start-session-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.start-session-btn:hover {
+  background: #45a049;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.end-session-btn {
+  background: #f44336;
+  color: white;
+}
+
+.end-session-btn:hover {
+  background: #da190b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+}
+
+.session-placeholder {
+  text-align: center;
+  padding: 20px 10px;
+}
+
+.placeholder-text {
+  font-size: 13px;
+  color: #999;
+}
+
+.session-ready {
+  background: #f0f7ff;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.ready-text {
+  font-size: 13px;
+  color: #1976d2;
+  line-height: 1.5;
+}
+
+.session-info {
+  text-align: center;
+  padding: 8px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
+}
+
+.info-text {
+  font-size: 11px;
+  color: #667eea;
+  line-height: 1.4;
+}
+
 /* Dashboard Styles */
 .dashboard {
   background: white;
@@ -206,31 +357,32 @@ body {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
   margin-top: 12px;
 }
 
 .metric-box {
   background: white;
   border-radius: 6px;
-  padding: 12px;
+  padding: 10px 8px;
   text-align: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .metric-number {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #667eea;
   margin-bottom: 4px;
 }
 
 .metric-description {
-  font-size: 11px;
+  font-size: 10px;
   color: #666;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
 }
 
 .encouragement {
