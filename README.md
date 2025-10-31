@@ -13,7 +13,7 @@ When you drift, FocusAura catches you—gently—and shows you exactly what to d
 ```
 Chrome Extension (React)
     ↓
-    [Distraction Event: user switched to youtube.com]
+    [Distraction Event: user got distracted]
     ↓
 FastAPI Backend
     ↓
@@ -22,24 +22,14 @@ FastAPI Backend
     ├─→ News API (recent neuroscience studies)
     └─→ Smart/Research API (personalized synthesis)
     ↓
-    [Fused intervention returned as JSON]
-    ↓
 Chrome Extension
-    └─→ Shows FocusCard overlay with nudge
+    └─→ Shows overlay with nudge
 ```
 
 ## Quick Start
-
-### Prerequisites
-
-- **Option A (Docker)**: Docker Desktop installed
-- **Option B (Local)**: Python 3.11+, Node.js 18+
-- Chrome browser
-- You.com API key
-
 ### Running Locally
 
-**Option 1: Docker (Easiest)**
+**Option 1: Docker**
 
 ```bash
 # From project root
@@ -48,31 +38,7 @@ docker compose up
 
 Backend runs at `http://localhost:8000`. See [DOCKER.md](DOCKER.md) for full Docker documentation.
 
-**Option 2: Development Mode (Local Python)**
-
-Open two terminal windows:
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-**Terminal 2 - Frontend:**
-```bash
-cd extension
-npm install
-npm run dev
-```
-
-Then open your browser to **http://localhost:5173** and test the full flow!
-
-The backend API docs will be available at **http://localhost:8000/docs**
-
----
-
-**Option 2: Chrome Extension Mode (Production-like)**
+**Option 2: Chrome Extension Mode**
 
 **Step 1 - Start Backend:**
 ```bash
@@ -101,25 +67,10 @@ cp public/icon*.png dist/ 2>/dev/null || true
 
 ### Testing the Demo
 
-1. **Set a goal**: "Finish Section 2 by 3 PM"
+1. **Set a goal** 
 2. Click **"Save Goal"**
 3. Click the yellow **"🎬 Simulate Distraction (Demo)"** button
-4. Watch the **FocusCard** appear with personalized intervention
-5. Click **"I'm back"** to log recovery and see metrics update
-
-### Current API Implementation
-
-⚠️ **Note**: The MVP uses **template-based responses** for the demo. Real You.com API integration requires:
-
-1. Get API key from You.com hackathon organizers
-2. Create `backend/.env` file:
-   ```bash
-   YOU_API_KEY=your_api_key_here
-   ```
-3. Uncomment TODO sections in `backend/you_client/*.py` files
-4. Replace dummy returns with actual API calls
-
-This approach allows you to demo the full UX flow immediately without waiting for API credentials.
+4. Watch it appear with personalized interventions.
 
 ## Security & Privacy Positioning
 
