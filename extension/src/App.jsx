@@ -315,8 +315,8 @@ function App() {
         />
 
         {/* Developer demo button */}
-        {/* <div className="dev-section"> */}
-        {/* <button
+        <div className="dev-section">
+          {/* <button
             className="simulate-btn"
             onClick={simulateDistraction}
           >
@@ -326,8 +326,8 @@ function App() {
             For judges: This triggers the full intervention flow
           </p> */}
 
-        {/* Quick reload button for development */}
-        {/* <button
+          {/* Quick reload button for development */}
+          <button
             className="reload-btn"
             onClick={reloadExtension}
             style={{
@@ -342,8 +342,8 @@ function App() {
             }}
           >
             🔄 Reload Extension
-          </button> */}
-        {/* </div> */}
+          </button>
+        </div>
       </main>
 
       {/* FocusCard overlay (conditionally rendered) */}

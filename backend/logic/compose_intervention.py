@@ -14,6 +14,7 @@ Flow:
 from typing import Dict
 import logging
 import re
+import json
 
 # You.com Agents API client
 from you_client.smart_api import query_agents_api
@@ -42,23 +43,20 @@ async def compose_intervention(event) -> Dict[str, str]:
     distraction_type = event.event
     context_title = event.context_title
 
-    # Build contextualized prompt for Agents API with clear structure requirements
+    # Build contextualized prompt for Agents API with JSON response requirement
     prompt = f"""I have been working on "{user_goal}" for {time_on_task} minutes in {context_title}, but I got distracted by {distraction_type}.
 
 Give me ONE specific, research-backed technique to recover my focus immediately. Base your advice on neuroscience and productivity research. Keep it concise and motivating.
 
-IMPORTANT: Format your response EXACTLY as follows (use clear separators):
+CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format (no other text before or after):
 
-ACTION:
-[One specific immediate action I should take right now - 20-30 words - must be concrete and actionable]
+{{
+  "action": "One specific immediate action I should take right now - 20-30 words - must be concrete and actionable",
+  "reasoning": "Brief scientific explanation of why this technique is effective - 40-60 words - must be different from the action and explain the underlying mechanism",
+  "source": "Research citation or credible source"
+}}
 
-WHY IT WORKS:
-[Brief scientific explanation of why this technique is effective - 40-60 words - must be different from the action and explain the mechanism]
-
-SOURCE:
-[Research citation or source]
-
-Be direct, practical, and encouraging. The ACTION and WHY IT WORKS sections must be distinct and not repeat each other."""
+Be direct, practical, and encouraging. The action and reasoning fields must be completely distinct - no repetition."""
 
     logger.info(f"Generating intervention for: {distraction_type} (goal: {user_goal})")
 
@@ -95,78 +93,53 @@ def _parse_agents_api_response(
     user_goal: str
 ) -> Dict[str, str]:
     """
-    Parse Agents API response into intervention components with robust validation.
+    Parse Agents API JSON response into intervention components with robust validation.
 
-    The Agents API returns a comprehensive answer in markdown format.
-    We need to extract:
-    - action_now: The immediate action to take
-    - why_it_works: The reasoning/evidence
-    - goal_reminder: User's goal
-    - citation: Source attribution
+    The Agents API should return a JSON object with:
+    - action: The immediate action to take
+    - reasoning: The scientific explanation
+    - source: Citation or source attribution
 
-    This function ensures action_now and why_it_works are always distinct.
+    This function ensures action and reasoning are always distinct.
     """
     action_now = ""
     why_it_works = ""
     citation = ""
 
-    # Strategy 1: Try to parse using explicit section markers (ACTION:, WHY IT WORKS:, SOURCE:)
-    action_match = re.search(r'ACTION:\s*\n?(.+?)(?=\n\s*WHY IT WORKS:|\n\s*SOURCE:|$)', answer, re.DOTALL | re.IGNORECASE)
-    why_match = re.search(r'WHY IT WORKS:\s*\n?(.+?)(?=\n\s*SOURCE:|$)', answer, re.DOTALL | re.IGNORECASE)
-    source_match = re.search(r'SOURCE:\s*\n?(.+?)(?=$)', answer, re.DOTALL | re.IGNORECASE)
+    try:
+        # Parse JSON response - try to find JSON object in the answer
+        json_str = answer.strip()
+        
+        # If there's markdown code blocks, extract JSON from within
+        if "```json" in json_str:
+            json_match = re.search(r'```json\s*\n(.*?)\n```', json_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
+        elif "```" in json_str:
+            json_match = re.search(r'```\s*\n(.*?)\n```', json_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1).strip()
+        
+        # Find JSON object if there's extra text
+        if not json_str.startswith('{'):
+            json_match = re.search(r'\{.*?"action".*?\}', json_str, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+        
+        # Parse the JSON
+        data = json.loads(json_str)
+        
+        # Extract fields directly from JSON
+        action_now = data.get("action", "").strip()
+        why_it_works = data.get("reasoning", "").strip()
+        citation = data.get("source", "").strip()
+        
+        logger.info("Successfully parsed JSON response")
+        
+    except (json.JSONDecodeError, AttributeError, ValueError) as e:
+        logger.warning(f"Failed to parse JSON response: {e}. Using fallback.")
 
-    if action_match:
-        action_now = _clean_text(action_match.group(1).strip())
-    if why_match:
-        why_it_works = _clean_text(why_match.group(1).strip())
-    if source_match:
-        citation = _clean_text(source_match.group(1).strip())
-
-    # Strategy 2: If section markers didn't work, try numbered format (1., 2., 3.)
-    if not action_now or not why_it_works:
-        numbered_sections = re.findall(r'(?:^|\n)\s*(\d+)\.\s*(.+?)(?=\n\s*\d+\.|\n\n|$)', answer, re.DOTALL)
-        if len(numbered_sections) >= 2:
-            if not action_now:
-                action_now = _clean_text(numbered_sections[0][1].strip())
-            if not why_it_works:
-                why_it_works = _clean_text(numbered_sections[1][1].strip())
-            if len(numbered_sections) >= 3 and not citation:
-                citation = _clean_text(numbered_sections[2][1].strip())
-
-    # Strategy 3: Fall back to paragraph-based parsing
-    if not action_now or not why_it_works:
-        # Split into paragraphs (groups of lines separated by blank lines)
-        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', answer) if p.strip()]
-        # Filter out very short paragraphs and headers
-        substantial_paragraphs = [
-            p for p in paragraphs
-            if len(p) > 30 and not p.startswith('#')
-        ]
-
-        if not action_now and len(substantial_paragraphs) > 0:
-            action_now = _clean_text(substantial_paragraphs[0])
-        if not why_it_works and len(substantial_paragraphs) > 1:
-            why_it_works = _clean_text(substantial_paragraphs[1])
-
-    # Strategy 4: If we still don't have both, try to split the first substantial paragraph
-    if not action_now or not why_it_works:
-        # Get first substantial content
-        content = answer.strip()
-        content = re.sub(r'^#+\s+.*\n?', '', content)  # Remove headers
-        content = _clean_text(content)
-
-        # Try to split on sentence boundaries
-        sentences = re.split(r'\.(?:\s+|$)', content)
-        sentences = [s.strip() + '.' for s in sentences if len(s.strip()) > 20]
-
-        if len(sentences) >= 2:
-            if not action_now:
-                action_now = sentences[0]
-            if not why_it_works:
-                # Combine remaining sentences for explanation
-                why_it_works = ' '.join(sentences[1:])
-
-    # Extract citation from citations list if not found in text
+    # Extract citation from citations list if not found in JSON
     if not citation and citations:
         citation = citations[0] if isinstance(citations[0], str) else str(citations[0])
 
@@ -175,10 +148,8 @@ def _parse_agents_api_response(
 
     # CRITICAL VALIDATION: Ensure action_now and why_it_works are different
     if action_now and why_it_works:
-        # Check if they're too similar (same content or one contains the other)
         if _are_texts_too_similar(action_now, why_it_works):
-            logger.warning("Detected duplicate content in action_now and why_it_works - applying fix")
-            # Try to split the content more intelligently
+            logger.warning("Detected duplicate content in action and reasoning - applying fix")
             combined = action_now if len(action_now) > len(why_it_works) else why_it_works
             action_now, why_it_works = _split_into_action_and_reasoning(combined)
 
@@ -186,7 +157,7 @@ def _parse_agents_api_response(
     action_now = _truncate_text(action_now, max_words=40)
     why_it_works = _truncate_text(why_it_works, max_words=80)
 
-    # Final fallback if validation still fails
+    # Final fallback if validation fails
     if not action_now or not why_it_works or _are_texts_too_similar(action_now, why_it_works):
         logger.error("Failed to parse distinct action and reasoning - using safe defaults")
         return {
@@ -202,22 +173,6 @@ def _parse_agents_api_response(
         "goal_reminder": f"Your goal: {user_goal}",
         "citation": citation or "Focus recovery research"
     }
-
-
-def _clean_text(text: str) -> str:
-    """Remove markdown formatting and clean up text."""
-    # Remove markdown formatting
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # Bold
-    text = re.sub(r'\*(.+?)\*', r'\1', text)      # Italic
-    text = re.sub(r'`(.+?)`', r'\1', text)        # Code
-    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)  # List markers
-    text = re.sub(r'^\s*\d+\.\s+', '', text)      # Numbered list markers
-    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Links
-    # Remove brackets from template placeholders
-    text = re.sub(r'\[|\]', '', text)
-    # Normalize whitespace
-    text = re.sub(r'\s+', ' ', text)
-    return text.strip()
 
 
 def _are_texts_too_similar(text1: str, text2: str) -> bool:
