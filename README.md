@@ -1,5 +1,9 @@
 # FocusAura
 
+<p align="center">
+  <img src="docs/2025-10-30_23-58.png" alt="FocusAura Icon" width="80"/>
+</p>
+
 FocusAura is an Chrome extension with AI focus assistants that watches for distraction events (like switching tabs mid-work session) and responds with personalized, science-backed micro-interventions powered by http://you.com real-time intelligence APIs.
 
 When you drift, FocusAura catches you and shows you exactly what to do next, backed by live research. 
