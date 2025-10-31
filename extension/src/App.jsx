@@ -270,11 +270,13 @@ function App() {
       </header>
 
       <main className="app-main">
-        <GoalSetter
-          initialGoal={goal}
-          initialDeadline={deadline}
-          onSave={handleGoalSave}
-        />
+        {!isSessionActive && (
+          <GoalSetter
+            initialGoal={goal}
+            initialDeadline={deadline}
+            onSave={handleGoalSave}
+          />
+        )}
 
         <SessionControl
           isSessionActive={isSessionActive}
