@@ -108,7 +108,7 @@ function openInterventionPage(hostname, url, tabId) {
     }).catch(error => {
       console.error('Failed to open intervention tab:', error);
     });
-  }, 100);
+  }, 1000);
 }
 
 /**
