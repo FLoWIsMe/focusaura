@@ -7,7 +7,7 @@
 
 console.log('🚀 FocusAura background service worker loaded');
 
-// Track focus state
+// Track focus state and session state
 let focusState = {
   currentTab: null,
   currentUrl: null,
@@ -18,6 +18,23 @@ let focusState = {
     app: ''
   }
 };
+
+// Session management state
+let sessionState = {
+  isActive: false,
+  goal: null,
+  startTime: null
+};
+
+// Load session state from storage on startup
+chrome.storage.local.get(['isSessionActive', 'sessionGoal', 'sessionStartTime'], (result) => {
+  if (result.isSessionActive) {
+    sessionState.isActive = true;
+    sessionState.goal = result.sessionGoal;
+    sessionState.startTime = result.sessionStartTime;
+    console.log('📋 Restored active session:', sessionState);
+  }
+});
 
 /**
  * Site classification: Determine if a URL is "work" or "distraction"
@@ -70,9 +87,14 @@ function showNotification(title, message, type = 'basic') {
 }
 
 /**
- * Monitor tab switches
+ * Monitor tab switches (only if session is active)
  */
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // Only monitor if a session is active
+  if (!sessionState.isActive) {
+    return;
+  }
+
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
     const classification = classifySite(tab.url);
@@ -82,6 +104,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
       url: tab.url,
       title: tab.title,
       classification: classification,
+      sessionActive: sessionState.isActive,
       timestamp: new Date().toISOString()
     });
 
@@ -104,7 +127,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
       
       showNotification(
         '⚠️ Distraction Detected',
-        `Switched to ${hostname}`
+        `Switched to ${hostname} - Stay focused on: ${sessionState.goal}`
       );
     } else if (classification === 'work') {
       showNotification(
@@ -119,9 +142,14 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 });
 
 /**
- * Monitor tab URL updates (navigation within same tab)
+ * Monitor tab URL updates (navigation within same tab - only if session is active)
  */
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Only monitor if a session is active
+  if (!sessionState.isActive) {
+    return;
+  }
+
   if (changeInfo.url) {
     const classification = classifySite(changeInfo.url);
     
@@ -130,12 +158,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       url: changeInfo.url,
       title: tab.title,
       classification: classification,
+      sessionActive: sessionState.isActive,
       timestamp: new Date().toISOString()
     });
 
     // Show intervention page for navigation to distraction sites
     if (classification === 'distraction') {
-      const hostname = new URL(changeInfo.url).hostname;
+      // const hostname = new URL(changeInfo.url).hostname;
       
       // Open intervention page in a new tab with error handling
       // setTimeout(() => {
@@ -148,7 +177,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       
       showNotification(
         '⚠️ Distraction Site',
-        `Navigated to ${hostname}`
+        `Navigated to ${hostname} - Remember your goal: ${sessionState.goal}`
       );
     }
   }
@@ -190,12 +219,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('📨 Message received:', message);
 
   if (message.type === 'GET_FOCUS_STATE') {
-    sendResponse(focusState);
-  } else if (message.type === 'TRIGGER_INTERVENTION') {
+    sendResponse({ focusState, sessionState });
+  } 
+  else if (message.type === 'START_SESSION') {
+    // Start monitoring session
+    sessionState.isActive = true;
+    sessionState.goal = message.goal;
+    sessionState.startTime = message.startTime;
+    
+    console.log('🎯 Session started:', sessionState);
+    
+    showNotification(
+      '🎯 Focus Session Started',
+      `Let's focus on: ${message.goal}`
+    );
+    
+    sendResponse({ success: true, sessionState });
+  }
+  else if (message.type === 'END_SESSION') {
+    // Stop monitoring session
+    const duration = Math.floor(message.duration / 60);
+    
+    sessionState.isActive = false;
+    sessionState.goal = null;
+    sessionState.startTime = null;
+    
+    console.log('🛑 Session ended after', duration, 'minutes');
+    
+    showNotification(
+      '🛑 Focus Session Ended',
+      `Great work! You focused for ${duration} minutes.`
+    );
+    
+    sendResponse({ success: true, duration });
+  }
+  else if (message.type === 'TRIGGER_INTERVENTION') {
     showNotification(
       '🎯 Focus Intervention',
       'Time to get back on track!'
     );
+    sendResponse({ success: true });
   }
 
   return true; // Keep channel open for async response

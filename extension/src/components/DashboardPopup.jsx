@@ -13,8 +13,19 @@ function DashboardPopup({
   goal,
   deadline,
   focusRecoveriesCount = 0,
-  minutesSaved = 0
+  minutesSaved = 0,
+  totalSessionTime = 0
 }) {
+  // Format total session time as hours and minutes
+  const formatSessionTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
 
   if (!goal) {
     return (
@@ -44,6 +55,11 @@ function DashboardPopup({
         )}
 
         <div className="metrics-grid">
+          <div className="metric-box">
+            <div className="metric-number">{formatSessionTime(totalSessionTime)}</div>
+            <div className="metric-description">Total Focus Time</div>
+          </div>
+
           <div className="metric-box">
             <div className="metric-number">{focusRecoveriesCount}</div>
             <div className="metric-description">Focus Recoveries</div>
