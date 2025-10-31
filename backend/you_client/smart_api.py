@@ -12,7 +12,7 @@ Endpoint: https://api.you.com/v1/agents/runs
 
 import logging
 import uuid
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from .config import config
 from .base_client import YouAPIClient, YouAPIError
 
@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 async def query_agents_api(
     input_text: str,
-    agent: str = "express"
+    agent: str = "express",
+    conversation_history: Optional[List[Dict[str, str]]] = None
 ) -> Dict:
     """
     Query You.com Agents API for AI-powered responses.
@@ -29,6 +30,8 @@ async def query_agents_api(
     Args:
         input_text: The question or prompt to send to the agent
         agent: The agent to use (default: "express" for quick answers)
+        conversation_history: Optional list of previous messages for context
+                            Each message: {"role": "user"|"assistant", "content": "..."}
 
     Returns:
         Dict with:
@@ -52,12 +55,24 @@ async def query_agents_api(
         logger.warning("Agents API: Live mode but no API key - falling back to templates")
         return _get_template_response(input_text)
 
+    # Build request body with optional conversation history
     request_body = {
         "agent": agent,
         "input": input_text,
         "stream": False,
         "tools": []
     }
+    
+    # Add conversation history if provided (for context-aware responses)
+    if conversation_history and len(conversation_history) > 0:
+        # Build a contextual prompt that includes history
+        history_context = "\n\nPrevious interactions in this session:\n"
+        for i, msg in enumerate(conversation_history, 1):
+            role = "User" if msg["role"] == "user" else "Assistant"
+            history_context += f"{role}: {msg['content'][:200]}...\n"
+        
+        request_body["input"] = history_context + "\n\nCurrent situation:\n" + input_text
+        logger.info(f"Agents API: Including {len(conversation_history)} messages from conversation history")
 
     logger.info(f"Agents API: Querying with agent '{agent}': {input_text[:100]}...")
     if config.DEBUG:

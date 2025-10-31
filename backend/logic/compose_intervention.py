@@ -5,10 +5,12 @@ This module orchestrates calls to You.com Agents API to generate
 personalized, evidence-based focus interventions.
 
 Flow:
-1. Receive FocusEvent with user context
-2. Call You.com Agents API with contextual prompt
-3. Parse response and extract intervention components
-4. Return structured InterventionResponse
+1. Receive FocusEvent with user context and session_id
+2. Retrieve or create session conversation history
+3. Call You.com Agents API with contextual prompt and conversation history
+4. Parse response and extract intervention components
+5. Update session conversation history
+6. Return structured InterventionResponse
 """
 
 from typing import Dict
@@ -19,6 +21,9 @@ import json
 # You.com Agents API client
 from you_client.smart_api import query_agents_api
 
+# Session management
+from logic.session_manager import session_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,24 +32,34 @@ async def compose_intervention(event) -> Dict[str, str]:
     Generate a personalized focus intervention using You.com Smart API.
 
     Args:
-        event: FocusEvent with user context and distraction details
+        event: FocusEvent with user context, distraction details, and session_id
 
     Returns:
         Dict with keys: action_now, why_it_works, goal_reminder, citation
 
     Implementation:
         Uses You.com Smart API to get evidence-based, citation-backed advice
-        tailored to the user's specific distraction context.
+        tailored to the user's specific distraction context and session history.
     """
 
     # Extract context from event
+    session_id = event.session_id
     user_goal = event.goal
     time_on_task = event.time_on_task_minutes
     distraction_type = event.event
     context_title = event.context_title
+    
+    # Get or create session conversation
+    session = session_manager.get_or_create_session(session_id)
+    logger.info(f"Session info: {session.get_summary()}")
 
     # Build contextualized prompt for Agents API with JSON response requirement
-    prompt = f"""I have been working on "{user_goal}" for {time_on_task} minutes in {context_title}, but I got distracted by {distraction_type}.
+    # Include session context if this isn't the first distraction
+    session_context = ""
+    if session.distraction_count > 0:
+        session_context = f"\n\nNOTE: This is distraction #{session.distraction_count + 1} in this focus session. Consider the user's pattern and adapt your advice accordingly."
+    
+    prompt = f"""I have been working on "{user_goal}" for {time_on_task} minutes in {context_title}, but I got distracted by {distraction_type}.{session_context}
 
 Give me ONE specific, research-backed technique to recover my focus immediately. Base your advice on neuroscience and productivity research. Keep it concise and motivating.
 
@@ -58,13 +73,20 @@ CRITICAL: You MUST respond with ONLY valid JSON in this EXACT format (no other t
 
 Be direct, practical, and encouraging. The action and reasoning fields must be completely distinct - no repetition."""
 
-    logger.info(f"Generating intervention for: {distraction_type} (goal: {user_goal})")
+    logger.info(f"Generating intervention for: {distraction_type} (goal: {user_goal}) - Session distraction #{session.distraction_count + 1}")
+    
+    # Get conversation history for context
+    conversation_history = session.get_conversation_history(max_messages=6)  # Last 3 exchanges
+    
+    # Add current prompt to session
+    session.add_message("user", prompt)
 
     try:
-        # Call You.com Agents API
+        # Call You.com Agents API with conversation history
         response = await query_agents_api(
             input_text=prompt,
-            agent="express"
+            agent="express",
+            conversation_history=conversation_history if len(conversation_history) > 0 else None
         )
 
         # Parse the Agents API response
@@ -77,14 +99,26 @@ Be direct, practical, and encouraging. The action and reasoning fields must be c
             citations=citations,
             user_goal=user_goal
         )
+        
+        # Add assistant's response to session history
+        assistant_summary = f"ACTION: {intervention['action_now']}\nREASONING: {intervention['why_it_works']}"
+        session.add_message("assistant", assistant_summary)
 
         logger.info("Intervention generated successfully")
+        logger.info(f"Updated session: {session.get_summary()}")
+        
         return intervention
 
     except Exception as e:
         logger.error(f"Error generating intervention: {e}")
         # Fallback to template-based intervention
-        return _generate_fallback_intervention(event)
+        fallback = _generate_fallback_intervention(event)
+        
+        # Still add to session history even for fallback
+        assistant_summary = f"ACTION: {fallback['action_now']}\nREASONING: {fallback['why_it_works']}"
+        session.add_message("assistant", assistant_summary)
+        
+        return fallback
 
 
 def _parse_agents_api_response(

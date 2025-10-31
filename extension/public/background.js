@@ -23,15 +23,17 @@ let focusState = {
 let sessionState = {
   isActive: false,
   goal: null,
-  startTime: null
+  startTime: null,
+  sessionId: null
 };
 
 // Load session state from storage on startup
-chrome.storage.local.get(['isSessionActive', 'sessionGoal', 'sessionStartTime'], (result) => {
+chrome.storage.local.get(['isSessionActive', 'sessionGoal', 'sessionStartTime', 'sessionId'], (result) => {
   if (result.isSessionActive) {
     sessionState.isActive = true;
     sessionState.goal = result.sessionGoal;
     sessionState.startTime = result.sessionStartTime;
+    sessionState.sessionId = result.sessionId;
     console.log('📋 Restored active session:', sessionState);
   }
 });
@@ -252,6 +254,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sessionState.isActive = true;
     sessionState.goal = message.goal;
     sessionState.startTime = message.startTime;
+    sessionState.sessionId = message.sessionId;
     
     console.log('🎯 Session started:', sessionState);
     

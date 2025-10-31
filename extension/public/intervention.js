@@ -10,7 +10,7 @@ const url = urlParams.get('url');
 const distractionTabId = parseInt(urlParams.get('tabId'), 10);
 
 // Load session data and fetch AI intervention
-chrome.storage.local.get(['sessionGoal', 'isSessionActive', 'sessionStartTime'], (result) => {
+chrome.storage.local.get(['sessionGoal', 'isSessionActive', 'sessionStartTime', 'sessionId'], (result) => {
   // Display distraction site
   const siteElement = document.getElementById('distraction-site');
   siteElement.textContent = site || 'Unknown Site';
@@ -19,6 +19,9 @@ chrome.storage.local.get(['sessionGoal', 'isSessionActive', 'sessionStartTime'],
   const goalElement = document.getElementById('goal-text');
   const userGoal = result.sessionGoal || 'Stay focused on your work';
   goalElement.textContent = userGoal;
+
+  // Get session ID or create temporary one
+  const currentSessionId = result.sessionId || `intervention_${Date.now()}`;
 
   // Show stats if session is active
   let focusTimeMinutes = 0;
@@ -29,14 +32,15 @@ chrome.storage.local.get(['sessionGoal', 'isSessionActive', 'sessionStartTime'],
   }
 
   // Call backend API for AI intervention (not awaited, runs independently)
-  fetchAIIntervention(userGoal, site, url, focusTimeMinutes);
+  fetchAIIntervention(currentSessionId, userGoal, site, url, focusTimeMinutes);
 });
 
 // Fetch AI-powered intervention from backend
-async function fetchAIIntervention(goal, distractionSite, distractionUrl, timeOnTask) {
+async function fetchAIIntervention(sessionId, goal, distractionSite, distractionUrl, timeOnTask) {
   const interventionSection = document.getElementById('ai-intervention-section');
   
   console.log('🔄 Fetching AI intervention from backend...', {
+    sessionId,
     goal,
     distractionSite,
     timeOnTask
@@ -49,6 +53,7 @@ async function fetchAIIntervention(goal, distractionSite, distractionUrl, timeOn
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        session_id: sessionId,
         goal: goal,
         context_title: distractionSite,
         context_app: 'Chrome',

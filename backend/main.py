@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from logic.compose_intervention import compose_intervention
+from logic.session_manager import session_manager
 from you_client.config import config as you_config
 
 app = FastAPI(
@@ -37,12 +38,14 @@ class FocusEvent(BaseModel):
     Represents a distraction event detected by the extension.
 
     Fields:
+        session_id: Unique identifier for the current focus session
         goal: User's stated objective (e.g., "Finish project proposal by 3 PM")
         context_title: Title of the work context (e.g., "Project_Proposal.docx")
         context_app: Application or site user was working in (e.g., "Google Docs")
         time_on_task_minutes: How long user was focused before distraction
         event: Type of distraction (e.g., "switched_to_youtube", "idle_timeout")
     """
+    session_id: str = Field(..., description="Unique ID for this focus session")
     goal: str = Field(..., description="User's current work goal")
     context_title: str = Field(..., description="Title of work context")
     context_app: str = Field(..., description="Application or site name")
@@ -125,6 +128,35 @@ async def health_check():
             "you_smart_research": "ready"
         }
     }
+
+
+@app.get("/sessions")
+async def get_sessions():
+    """
+    Get information about all active focus sessions.
+    
+    Returns:
+        - Number of active sessions
+        - Details for each session (distraction count, message count, etc.)
+    """
+    # Clean up old sessions before reporting
+    session_manager.cleanup_old_sessions()
+    
+    return session_manager.get_session_info()
+
+
+@app.delete("/sessions/{session_id}")
+async def clear_session(session_id: str):
+    """
+    Clear a specific session's conversation history.
+    
+    This is useful for testing or when a user wants to start fresh.
+    """
+    if session_id in session_manager.sessions:
+        del session_manager.sessions[session_id]
+        return {"status": "success", "message": f"Session {session_id} cleared"}
+    else:
+        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
 
 
 if __name__ == "__main__":

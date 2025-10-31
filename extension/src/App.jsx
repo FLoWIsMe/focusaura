@@ -22,6 +22,7 @@ function App() {
   // Session state
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [sessionId, setSessionId] = useState(null);
   const [totalSessionTime, setTotalSessionTime] = useState(0);
 
   // Recovery metrics
@@ -49,6 +50,7 @@ function App() {
             "minutesSaved",
             "isSessionActive",
             "sessionStartTime",
+            "sessionId",
             "totalSessionTime",
           ],
           (result) => {
@@ -59,6 +61,7 @@ function App() {
             if (result.isSessionActive) {
               setIsSessionActive(true);
               setSessionStartTime(result.sessionStartTime);
+              setSessionId(result.sessionId);
             }
             if (result.totalSessionTime)
               setTotalSessionTime(result.totalSessionTime);
@@ -95,8 +98,14 @@ function App() {
     }
 
     const startTime = Date.now();
+    // Generate unique session ID: timestamp + random string
+    const newSessionId = `session_${startTime}_${Math.random().toString(36).substring(2, 9)}`;
+    
     setIsSessionActive(true);
     setSessionStartTime(startTime);
+    setSessionId(newSessionId);
+
+    console.log("🎯 Starting focus session:", newSessionId);
 
     // Save session state to storage
     try {
@@ -104,6 +113,7 @@ function App() {
         chrome.storage.local.set({
           isSessionActive: true,
           sessionStartTime: startTime,
+          sessionId: newSessionId,
           sessionGoal: goal,
         });
 
@@ -113,6 +123,7 @@ function App() {
             type: "START_SESSION",
             goal: goal,
             startTime: startTime,
+            sessionId: newSessionId,
           },
           (response) => {
             console.log("✅ Session started:", response);
@@ -142,9 +153,12 @@ function App() {
     const endTime = Date.now();
     const sessionDuration = Math.floor((endTime - sessionStartTime) / 1000); // in seconds
     const newTotalTime = totalSessionTime + sessionDuration;
+    
+    console.log("🏁 Ending focus session:", sessionId, `(${Math.floor(sessionDuration / 60)} minutes)`);
 
     setIsSessionActive(false);
     setSessionStartTime(null);
+    setSessionId(null);
     setTotalSessionTime(newTotalTime);
 
     // Save session state to storage
@@ -153,6 +167,7 @@ function App() {
         chrome.storage.local.set({
           isSessionActive: false,
           sessionStartTime: null,
+          sessionId: null,
           totalSessionTime: newTotalTime,
         });
 
@@ -192,14 +207,20 @@ function App() {
   const simulateDistraction = async () => {
     console.log("🎬 Simulating distraction event...");
 
+    // Use current session ID or create a temporary one for demo
+    const currentSessionId = sessionId || `demo_session_${Date.now()}`;
+    
     // Build a realistic FocusEvent payload
     const focusEvent = {
+      session_id: currentSessionId,
       goal: goal || "Complete project documentation",
       context_title: "Project_Proposal.docx",
       context_app: "Google Docs",
       time_on_task_minutes: 42,
       event: "switched_to_youtube",
     };
+    
+    console.log("📤 Sending focus event with session:", currentSessionId);
 
     try {
       // Call FastAPI backend
@@ -316,7 +337,7 @@ function App() {
 
         {/* Developer demo button */}
         <div className="dev-section">
-          {/* <button
+          <button
             className="simulate-btn"
             onClick={simulateDistraction}
           >
@@ -324,7 +345,7 @@ function App() {
           </button>
           <p className="dev-note">
             For judges: This triggers the full intervention flow
-          </p> */}
+          </p>
 
           {/* Quick reload button for development */}
           <button
