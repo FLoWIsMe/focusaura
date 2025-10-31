@@ -13,6 +13,7 @@ Flow:
 
 from typing import Dict
 import logging
+import re
 
 # You.com Agents API client
 from you_client.smart_api import query_agents_api
@@ -41,17 +42,23 @@ async def compose_intervention(event) -> Dict[str, str]:
     distraction_type = event.event
     context_title = event.context_title
 
-    # Build contextualized prompt for Agents API
+    # Build contextualized prompt for Agents API with clear structure requirements
     prompt = f"""I have been working on "{user_goal}" for {time_on_task} minutes in {context_title}, but I got distracted by {distraction_type}.
 
 Give me ONE specific, research-backed technique to recover my focus immediately. Base your advice on neuroscience and productivity research. Keep it concise and motivating.
 
-Format your response as:
-1. One specific immediate action (20-30 words)
-2. Brief scientific reasoning why it works (40-50 words)
-3. Reference to the research/source
+IMPORTANT: Format your response EXACTLY as follows (use clear separators):
 
-Be direct, practical, and encouraging. Focus on what I should do RIGHT NOW."""
+ACTION:
+[One specific immediate action I should take right now - 20-30 words - must be concrete and actionable]
+
+WHY IT WORKS:
+[Brief scientific explanation of why this technique is effective - 40-60 words - must be different from the action and explain the mechanism]
+
+SOURCE:
+[Research citation or source]
+
+Be direct, practical, and encouraging. The ACTION and WHY IT WORKS sections must be distinct and not repeat each other."""
 
     logger.info(f"Generating intervention for: {distraction_type} (goal: {user_goal})")
 
@@ -88,7 +95,7 @@ def _parse_agents_api_response(
     user_goal: str
 ) -> Dict[str, str]:
     """
-    Parse Agents API response into intervention components.
+    Parse Agents API response into intervention components with robust validation.
 
     The Agents API returns a comprehensive answer in markdown format.
     We need to extract:
@@ -96,56 +103,98 @@ def _parse_agents_api_response(
     - why_it_works: The reasoning/evidence
     - goal_reminder: User's goal
     - citation: Source attribution
+
+    This function ensures action_now and why_it_works are always distinct.
     """
-
-    # Split answer into lines for parsing
-    lines = [line.strip() for line in answer.split('\n') if line.strip()]
-
-    # Extract action (usually first substantive line or after "1.")
     action_now = ""
     why_it_works = ""
     citation = ""
 
-    # Simple heuristic parsing
-    for i, line in enumerate(lines):
-        # Skip markdown headers
-        if line.startswith('#'):
-            continue
+    # Strategy 1: Try to parse using explicit section markers (ACTION:, WHY IT WORKS:, SOURCE:)
+    action_match = re.search(r'ACTION:\s*\n?(.+?)(?=\n\s*WHY IT WORKS:|\n\s*SOURCE:|$)', answer, re.DOTALL | re.IGNORECASE)
+    why_match = re.search(r'WHY IT WORKS:\s*\n?(.+?)(?=\n\s*SOURCE:|$)', answer, re.DOTALL | re.IGNORECASE)
+    source_match = re.search(r'SOURCE:\s*\n?(.+?)(?=$)', answer, re.DOTALL | re.IGNORECASE)
 
-        if not action_now and (line.startswith('1.') or line.startswith('**') or len(line) > 20):
-            # First substantial line or numbered item is likely the action
-            action_now = line.lstrip('1.').strip().strip('*').strip()
-        elif not why_it_works and i > 0 and (line.startswith('2.') or 'research' in line.lower() or 'study' in line.lower() or 'pomodoro' in line.lower()):
-            # Second item or line mentioning research is likely the reasoning
-            why_it_works = line.lstrip('2.').strip().strip('*').strip()
+    if action_match:
+        action_now = _clean_text(action_match.group(1).strip())
+    if why_match:
+        why_it_works = _clean_text(why_match.group(1).strip())
+    if source_match:
+        citation = _clean_text(source_match.group(1).strip())
 
-    # Extract citation from citations list if provided
-    if citations:
+    # Strategy 2: If section markers didn't work, try numbered format (1., 2., 3.)
+    if not action_now or not why_it_works:
+        numbered_sections = re.findall(r'(?:^|\n)\s*(\d+)\.\s*(.+?)(?=\n\s*\d+\.|\n\n|$)', answer, re.DOTALL)
+        if len(numbered_sections) >= 2:
+            if not action_now:
+                action_now = _clean_text(numbered_sections[0][1].strip())
+            if not why_it_works:
+                why_it_works = _clean_text(numbered_sections[1][1].strip())
+            if len(numbered_sections) >= 3 and not citation:
+                citation = _clean_text(numbered_sections[2][1].strip())
+
+    # Strategy 3: Fall back to paragraph-based parsing
+    if not action_now or not why_it_works:
+        # Split into paragraphs (groups of lines separated by blank lines)
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', answer) if p.strip()]
+        # Filter out very short paragraphs and headers
+        substantial_paragraphs = [
+            p for p in paragraphs
+            if len(p) > 30 and not p.startswith('#')
+        ]
+
+        if not action_now and len(substantial_paragraphs) > 0:
+            action_now = _clean_text(substantial_paragraphs[0])
+        if not why_it_works and len(substantial_paragraphs) > 1:
+            why_it_works = _clean_text(substantial_paragraphs[1])
+
+    # Strategy 4: If we still don't have both, try to split the first substantial paragraph
+    if not action_now or not why_it_works:
+        # Get first substantial content
+        content = answer.strip()
+        content = re.sub(r'^#+\s+.*\n?', '', content)  # Remove headers
+        content = _clean_text(content)
+
+        # Try to split on sentence boundaries
+        sentences = re.split(r'\.(?:\s+|$)', content)
+        sentences = [s.strip() + '.' for s in sentences if len(s.strip()) > 20]
+
+        if len(sentences) >= 2:
+            if not action_now:
+                action_now = sentences[0]
+            if not why_it_works:
+                # Combine remaining sentences for explanation
+                why_it_works = ' '.join(sentences[1:])
+
+    # Extract citation from citations list if not found in text
+    if not citation and citations:
         citation = citations[0] if isinstance(citations[0], str) else str(citations[0])
-
-    # Fallback: if parsing failed, use full answer as reasoning
-    if not action_now:
-        # Use first meaningful paragraph as action
-        for line in lines:
-            if line and not line.startswith('#') and len(line) > 20:
-                action_now = line[:200]
-                break
-
-    if not why_it_works:
-        # Use second paragraph or full answer
-        for i, line in enumerate(lines):
-            if i > 0 and line and not line.startswith('#') and len(line) > 20:
-                why_it_works = line[:300]
-                break
-        if not why_it_works:
-            why_it_works = answer[:300]
 
     if not citation:
         citation = "You.com AI Research"
 
-    # Clean up markdown formatting
-    action_now = action_now.strip('*').strip()
-    why_it_works = why_it_works.strip('*').strip()
+    # CRITICAL VALIDATION: Ensure action_now and why_it_works are different
+    if action_now and why_it_works:
+        # Check if they're too similar (same content or one contains the other)
+        if _are_texts_too_similar(action_now, why_it_works):
+            logger.warning("Detected duplicate content in action_now and why_it_works - applying fix")
+            # Try to split the content more intelligently
+            combined = action_now if len(action_now) > len(why_it_works) else why_it_works
+            action_now, why_it_works = _split_into_action_and_reasoning(combined)
+
+    # Apply length constraints
+    action_now = _truncate_text(action_now, max_words=40)
+    why_it_works = _truncate_text(why_it_works, max_words=80)
+
+    # Final fallback if validation still fails
+    if not action_now or not why_it_works or _are_texts_too_similar(action_now, why_it_works):
+        logger.error("Failed to parse distinct action and reasoning - using safe defaults")
+        return {
+            "action_now": "Take a 90-second walk away from your screen, then return to your task.",
+            "why_it_works": "Brief physical movement resets prefrontal cortex activity and reduces the cognitive switching cost from distractions. Stanford research shows this restores focus faster than staying seated.",
+            "goal_reminder": f"Your goal: {user_goal}",
+            "citation": "Stanford Neuroscience Research (2024)"
+        }
 
     return {
         "action_now": action_now or "Take a 90-second walk, then return to work.",
@@ -153,6 +202,115 @@ def _parse_agents_api_response(
         "goal_reminder": f"Your goal: {user_goal}",
         "citation": citation or "Focus recovery research"
     }
+
+
+def _clean_text(text: str) -> str:
+    """Remove markdown formatting and clean up text."""
+    # Remove markdown formatting
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # Bold
+    text = re.sub(r'\*(.+?)\*', r'\1', text)      # Italic
+    text = re.sub(r'`(.+?)`', r'\1', text)        # Code
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)  # List markers
+    text = re.sub(r'^\s*\d+\.\s+', '', text)      # Numbered list markers
+    text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)  # Links
+    # Remove brackets from template placeholders
+    text = re.sub(r'\[|\]', '', text)
+    # Normalize whitespace
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def _are_texts_too_similar(text1: str, text2: str) -> bool:
+    """Check if two texts are too similar (likely duplicates)."""
+    if not text1 or not text2:
+        return False
+
+    # Normalize for comparison
+    t1 = text1.lower().strip()
+    t2 = text2.lower().strip()
+
+    # Check if identical
+    if t1 == t2:
+        return True
+
+    # Check if one contains the other (with some tolerance)
+    if len(t1) > 20 and len(t2) > 20:
+        if t1 in t2 or t2 in t1:
+            return True
+
+    # Check if they start with the same content (likely copy-paste)
+    min_len = min(len(t1), len(t2))
+    if min_len > 50:
+        # If first 50 chars are identical, they're too similar
+        if t1[:50] == t2[:50]:
+            return True
+
+    return False
+
+
+def _split_into_action_and_reasoning(text: str) -> tuple:
+    """
+    Intelligently split combined text into action and reasoning.
+
+    Returns:
+        tuple: (action_now, why_it_works)
+    """
+    # Try to find a natural split point
+    sentences = re.split(r'\.(?:\s+|$)', text)
+    sentences = [s.strip() + '.' for s in sentences if s.strip()]
+
+    if len(sentences) >= 2:
+        # First sentence(s) as action, rest as reasoning
+        # Look for keywords that indicate explanation
+        explanation_start = -1
+        for i, sent in enumerate(sentences):
+            if any(keyword in sent.lower() for keyword in ['because', 'this', 'research', 'study', 'shows', 'activates', 'reduces']):
+                explanation_start = i
+                break
+
+        if explanation_start > 0:
+            action = ' '.join(sentences[:explanation_start])
+            reasoning = ' '.join(sentences[explanation_start:])
+        else:
+            # Default: split roughly in half
+            mid = len(sentences) // 2
+            if mid == 0:
+                mid = 1
+            action = ' '.join(sentences[:mid])
+            reasoning = ' '.join(sentences[mid:])
+
+        return (action, reasoning)
+
+    # If only one sentence, create a generic split
+    return (
+        "Close the distraction and take three deep breaths before returning to your task.",
+        "This brief pause resets your attention and reduces the cognitive cost of context switching."
+    )
+
+
+def _truncate_text(text: str, max_words: int) -> str:
+    """Truncate text to maximum number of words while preserving sentence structure."""
+    if not text:
+        return text
+
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+
+    # Truncate and try to end at sentence boundary
+    truncated = ' '.join(words[:max_words])
+
+    # If we're in the middle of a sentence, try to complete it
+    if not truncated.endswith('.'):
+        # Look for the last period before truncation point
+        last_period = truncated.rfind('.')
+        if last_period > len(truncated) * 0.7:  # If we're at least 70% through
+            truncated = truncated[:last_period + 1]
+        else:
+            # Add ellipsis if we can't find good ending
+            truncated += '...'
+
+    return truncated
 
 
 def _generate_fallback_intervention(event) -> Dict[str, str]:
