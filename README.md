@@ -1,4 +1,4 @@
-<img src="docs/2025-10-30_23-58.png" alt="FocusAura Icon" width="200"/>
+<img src="docs/2025-10-30_23-58.png" alt="FocusAura Icon" width="300"/>
 
 # FocusAura
 
