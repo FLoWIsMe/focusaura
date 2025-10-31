@@ -50,8 +50,6 @@ uvicorn main:app --reload --port 8000
 cd extension
 npm install
 npm run build
-cp public/manifest.json dist/
-cp public/icon*.png dist/ 2>/dev/null || true
 ```
 
 **Step 3 - Load in Chrome:**
