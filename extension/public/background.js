@@ -86,6 +86,31 @@ function showNotification(title, message, type = 'basic') {
   });
 }
 
+// Track recently opened intervention tabs to prevent infinite loops
+let recentInterventions = new Set();
+
+/**
+ * Open intervention page for distraction site
+ */
+function openInterventionPage(hostname, url, tabId) {
+  // Prevent multiple interventions for the same tab within 5 seconds
+  if (recentInterventions.has(tabId)) {
+    console.log('Intervention already opened for this tab recently');
+    return;
+  }
+  
+  recentInterventions.add(tabId);
+  setTimeout(() => recentInterventions.delete(tabId), 5000);
+  
+  setTimeout(() => {
+    chrome.tabs.create({
+      url: chrome.runtime.getURL(`intervention.html?site=${encodeURIComponent(hostname)}&url=${encodeURIComponent(url)}&tabId=${tabId}`)
+    }).catch(error => {
+      console.error('Failed to open intervention tab:', error);
+    });
+  }, 100);
+}
+
 /**
  * Monitor tab switches (only if session is active)
  */
@@ -97,6 +122,13 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 
   try {
     const tab = await chrome.tabs.get(activeInfo.tabId);
+    
+    // Skip if this is an intervention page itself
+    if (tab.url && tab.url.includes('intervention.html')) {
+      console.log('Skipping intervention page itself');
+      return;
+    }
+    
     const classification = classifySite(tab.url);
     
     console.log('🔄 Tab switched:', {
@@ -116,14 +148,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     if (classification === 'distraction') {
       const hostname = new URL(tab.url).hostname;
       
-      // Open intervention page in a new tab with error handling
-      // setTimeout(() => {
-      //   chrome.tabs.create({
-      //     url: chrome.runtime.getURL(`intervention.html?site=${encodeURIComponent(hostname)}&url=${encodeURIComponent(tab.url)}`)
-      //   }).catch(error => {
-      //     console.error('Failed to open intervention tab:', error);
-      //   });
-      // }, 100);
+      // Open intervention page
+      openInterventionPage(hostname, tab.url, activeInfo.tabId);
       
       showNotification(
         '⚠️ Distraction Detected',
@@ -151,6 +177,12 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 
   if (changeInfo.url) {
+    // Skip if this is an intervention page itself
+    if (changeInfo.url.includes('intervention.html')) {
+      console.log('Skipping intervention page itself');
+      return;
+    }
+    
     const classification = classifySite(changeInfo.url);
     
     console.log('🌐 Tab URL updated:', {
@@ -164,16 +196,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
     // Show intervention page for navigation to distraction sites
     if (classification === 'distraction') {
-      // const hostname = new URL(changeInfo.url).hostname;
+      const hostname = new URL(changeInfo.url).hostname;
       
-      // Open intervention page in a new tab with error handling
-      // setTimeout(() => {
-      //   chrome.tabs.create({
-      //     url: chrome.runtime.getURL(`intervention.html?site=${encodeURIComponent(hostname)}&url=${encodeURIComponent(changeInfo.url)}`)
-      //   }).catch(error => {
-      //     console.error('Failed to open intervention tab:', error);
-      //   });
-      // }, 100);
+      // Open intervention page
+      openInterventionPage(hostname, changeInfo.url, tabId);
       
       showNotification(
         '⚠️ Distraction Site',
